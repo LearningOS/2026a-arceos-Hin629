@@ -2,7 +2,7 @@
   "schema": 1,
   "courseId": 2078,
   "repository": "LearningOS/2026a-arceos-Hin629",
-  "commit": "7ed7d19b9ad5a482b189a413bb219107359ebb99",
+  "commit": "53106d375eda6fabed1875e46531f87d59794c98",
   "score": 100,
   "totalScore": 600,
   "exercises": [
@@ -32,7 +32,7 @@
       "max": 100,
       "score": 0,
       "status": "fail",
-      "exitCode": 2
+      "exitCode": 0
     },
     {
       "name": "sys_map",
@@ -50,9 +50,9 @@
     }
   ],
   "student": "Hin629",
-  "runId": "42623882685",
+  "runId": "42820444582",
   "runAttempt": "1",
   "upload": {
-    "status": "accepted"
+    "status": "pending"
   }
 }
