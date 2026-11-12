@@ -2,8 +2,8 @@
   "schema": 1,
   "courseId": 2078,
   "repository": "LearningOS/2026a-arceos-Hin629",
-  "commit": "60fda4a224921a7e97f6855a724adf7647992681",
-  "score": 300,
+  "commit": "70b928454ef674016e0821b529f44e96d3438173",
+  "score": 400,
   "totalScore": 600,
   "exercises": [
     {
@@ -16,8 +16,8 @@
     {
       "name": "ramfs_rename",
       "max": 100,
-      "score": 0,
-      "status": "fail",
+      "score": 100,
+      "status": "pass",
       "exitCode": 0
     },
     {
@@ -50,9 +50,9 @@
     }
   ],
   "student": "Hin629",
-  "runId": "42981888075",
+  "runId": "43176777115",
   "runAttempt": "1",
   "upload": {
-    "status": "accepted"
+    "status": "pending"
   }
 }
