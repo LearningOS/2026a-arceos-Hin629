@@ -67,6 +67,17 @@ impl DirNode {
         children.remove(name);
         Ok(())
     }
+
+    /// rename a node by the given name to a new name in this directory.
+    pub fn rename_node(&self, name: &str, new_name : &str) -> VfsResult {
+        let mut children = self.children.write();
+        if let Some(v) = children.remove(name) {
+            children.insert(String::from(new_name), v);
+            Ok(())
+        } else {
+            Err(VfsError::NotFound)
+        }
+    }
 }
 
 impl VfsNodeOps for DirNode {
@@ -165,6 +176,34 @@ impl VfsNodeOps for DirNode {
         }
     }
 
+    fn rename(&self, src_path: &str, dst_path: &str) -> VfsResult {
+        log::debug!("remove at ramfs: rename {} to {}",src_path,dst_path);
+        let (name, rest) = split_path(src_path);
+        if let Some(rest) = rest {
+            match name {
+                "" | "." => self.rename(rest,dst_path),
+                ".." => self.parent().ok_or(VfsError::NotFound)?.rename(rest,dst_path),
+                _ => {
+                    let subdir = self
+                        .children
+                        .read()
+                        .get(name)
+                        .ok_or(VfsError::NotFound)?
+                        .clone();
+                    subdir.rename(rest,dst_path)
+                }
+            }
+        } else if name.is_empty() || name == "." || name == ".." {
+            Err(VfsError::InvalidInput) // rename '.' or '..
+        } else {
+            let new_name = dst_path
+                            .rsplit('/')
+                            .next()
+                            .filter(|name| !name.is_empty() && *name != "." && *name != "..")
+                            .ok_or(VfsError::InvalidInput)?;
+            self.rename_node(name,new_name)
+        }
+    }
     axfs_vfs::impl_vfs_dir_default! {}
 }
 
