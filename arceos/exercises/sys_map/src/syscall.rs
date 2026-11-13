@@ -8,6 +8,8 @@ use axtask::current;
 use axtask::TaskExtRef;
 use axhal::paging::MappingFlags;
 use arceos_posix_api as api;
+use alloc::vec::Vec;
+use memory_addr::{VirtAddr, VirtAddrRange, PAGE_SIZE_4K};
 
 const SYS_IOCTL: usize = 29;
 const SYS_OPENAT: usize = 56;
@@ -45,10 +47,12 @@ macro_rules! syscall_body {
 }
 
 bitflags::bitflags! {
-    #[derive(Debug)]
+    #[derive(Debug,Clone,Copy)]
     /// permissions for sys_mmap
     ///
-    /// See <https://github.com/bminor/glibc/blob/master/bits/mman.h>
+    /// See <https://github.com/bminor/glibc/blob/master/flags/;
+    /// let mapflags : MappingFlags = flags.into();
+    /// mman.h>
     struct MmapProt: i32 {
         /// Page can be read.
         const PROT_READ = 1 << 0;
@@ -76,7 +80,7 @@ impl From<MmapProt> for MappingFlags {
 }
 
 bitflags::bitflags! {
-    #[derive(Debug)]
+    #[derive(Debug,Clone,Copy)]
     /// flags for sys_mmap
     ///
     /// See <https://github.com/bminor/glibc/blob/master/bits/mman.h>
@@ -131,16 +135,74 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
     ret
 }
 
-#[allow(unused_variables)]
 fn sys_mmap(
     addr: *mut usize,
     length: usize,
     prot: i32,
     flags: i32,
     fd: i32,
-    _offset: isize,
+    offset: isize,
 ) -> isize {
-    unimplemented!("no sys_mmap!");
+    let result = (|| -> axerrno::LinuxResult<usize> {
+        let prot = MmapProt::from_bits(prot).ok_or(LinuxError::EINVAL)?;
+        let flags = MmapFlags::from_bits(flags).ok_or(LinuxError::EINVAL)?;
+        // 只支持私有文件映射，也可以支持匿名映射，其他的 mmap 映射方式不支持
+        let supported = MmapFlags::MAP_PRIVATE | MmapFlags::MAP_ANONYMOUS;
+        if !flags.contains(MmapFlags::MAP_PRIVATE) || !supported.contains(flags) {
+            return Err(LinuxError::EINVAL);
+        }
+        if length == 0 || offset < 0 || offset as usize % PAGE_SIZE_4K != 0 {
+            return Err(LinuxError::EINVAL);
+        }
+        let size = length
+            .checked_add(PAGE_SIZE_4K - 1)
+            .ok_or(LinuxError::ENOMEM)?
+            & !(PAGE_SIZE_4K - 1);
+        let mut map_flags = MappingFlags::from(prot);
+        if map_flags.contains(MappingFlags::WRITE) {
+            map_flags |= MappingFlags::READ;
+        }
+        if prot.is_empty() {
+            return Err(LinuxError::EINVAL);
+        }
+
+        let curr = current();
+        let mut aspace = curr.task_ext().aspace.lock();
+        let base = aspace.base().max(VirtAddr::from(PAGE_SIZE_4K));
+        let limit = VirtAddrRange::from_start_size(base, aspace.end() - base);
+        let hint = VirtAddr::from(addr as usize & !(PAGE_SIZE_4K - 1));
+        let start = aspace
+            .find_free_area(hint, size, limit)
+            .filter(|start| size <= aspace.end() - *start)
+            .or_else(|| aspace.find_free_area(base, size, limit))
+            .ok_or(LinuxError::ENOMEM)?;
+
+        let mut data = Vec::new();
+        if !flags.contains(MmapFlags::MAP_ANONYMOUS) {
+            let file = api::File::from_fd(fd)?;
+            data.try_reserve_exact(size).map_err(|_| LinuxError::ENOMEM)?;
+            data.resize(size, 0);
+            let mut filled = 0;
+            while filled < size {
+                let n = file.read_at(offset as u64 + filled as u64, &mut data[filled..])?;
+                if n == 0 {
+                    break;
+                }
+                filled += n;
+            }
+            data.truncate(filled);
+        }
+
+        aspace.map_alloc(start, size, map_flags, true)?;
+        if !data.is_empty() {
+            aspace.write(start, &data)?;
+        }
+        Ok(start.as_usize())
+    })();
+    match result {
+        Ok(start) => start as isize,
+        Err(err) => -(err.code() as isize),
+    }
 }
 
 fn sys_openat(dfd: c_int, fname: *const c_char, flags: c_int, mode: api::ctypes::mode_t) -> isize {

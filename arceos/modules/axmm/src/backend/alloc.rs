@@ -43,13 +43,16 @@ impl Backend {
         if populate {
             // allocate all possible physical frames for populated mapping.
             for addr in PageIter4K::new(start, start + size).unwrap() {
-                if let Some(frame) = alloc_frame(true) {
-                    if let Ok(tlb) = pt.map(addr, frame, PageSize::Size4K, flags) {
-                        tlb.ignore(); // TLB flush on map is unnecessary, as there are no outdated mappings.
-                    } else {
-                        return false;
-                    }
-                }
+                let Some(frame) = alloc_frame(true) else {
+                    self.unmap_alloc(start, addr - start, pt, populate);
+                    return false;
+                };
+                let Ok(tlb) = pt.map(addr, frame, PageSize::Size4K, flags) else {
+                    dealloc_frame(frame);
+                    self.unmap_alloc(start, addr - start, pt, populate);
+                    return false;
+                };
+                tlb.ignore(); // No outdated mapping to flush.
             }
             true
         } else {

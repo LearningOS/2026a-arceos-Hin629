@@ -47,3 +47,4 @@ __pycache__/
 /arceos/arceos-fada.itb
 .DS_Store
 ._*
+.vscode/
