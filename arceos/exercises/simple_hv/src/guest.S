@@ -3,6 +3,8 @@
 .global _run_guest
 _run_guest:
     /* Save hypervisor state */
+    csrrci t1, sstatus, 2
+    sd     t1, ({hyp_sstatus})(a0)
 
     /* Save hypervisor GPRs (except T0-T6 and a0, which is GuestInfo and stashed in sscratch) */
     sd   ra, ({hyp_ra})(a0)
@@ -31,8 +33,8 @@ _run_guest:
 
     /* Swap in guest CSRs. */
     ld    t1, ({guest_sstatus})(a0)
-    csrrw t1, sstatus, t1
-    sd    t1, ({hyp_sstatus})(a0)
+    andi  t1, t1, -3
+    csrw  sstatus, t1
 
     ld    t1, ({guest_hstatus})(a0)
     csrrw t1, hstatus, t1
@@ -130,10 +132,15 @@ _guest_exit:
     sd    t0, ({guest_a0})(a0)
 
 _restore_csrs:
-    /* Swap in hypervisor CSRs. */
-    ld    t1, ({hyp_sstatus})(a0)
-    csrrw t1, sstatus, t1
+    /* Save the guest trap state before restoring host interrupts. */
+    csrr  t1, sstatus
     sd    t1, ({guest_sstatus})(a0)
+    csrr  t1, sepc
+    sd    t1, ({guest_sepc})(a0)
+    csrr  t1, scause
+    sd    t1, ({trap_scause})(a0)
+    csrr  t1, stval
+    sd    t1, ({trap_stval})(a0)
 
     csrr  t1, hstatus
     sd    t1, ({guest_hstatus})(a0)
@@ -147,11 +154,6 @@ _restore_csrs:
 
     ld    t1, ({hyp_sscratch})(a0)
     csrw  sscratch, t1
-
-    /* Save guest EPC. */
-    csrr  t1, sepc
-    sd    t1, ({guest_sepc})(a0)
-
 
     /* Restore hypervisor GPRs. */
     ld   ra, ({hyp_ra})(a0)
@@ -178,4 +180,6 @@ _restore_csrs:
     ld   s11, ({hyp_s11})(a0)
     ld   sp, ({hyp_sp})(a0)
 
+    ld   t1, ({hyp_sstatus})(a0)
+    csrw sstatus, t1
     ret

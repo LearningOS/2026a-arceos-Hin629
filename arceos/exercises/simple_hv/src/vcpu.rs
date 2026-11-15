@@ -178,6 +178,8 @@ global_asm!(
     guest_hstatus = const guest_csr_offset!(hstatus),
     guest_scounteren = const guest_csr_offset!(scounteren),
     guest_sepc = const guest_csr_offset!(sepc),
+    trap_scause = const offset_of!(VmCpuRegisters, trap_csrs) + offset_of!(VmCpuTrapState, scause),
+    trap_stval = const offset_of!(VmCpuRegisters, trap_csrs) + offset_of!(VmCpuTrapState, stval),
 
 );
 

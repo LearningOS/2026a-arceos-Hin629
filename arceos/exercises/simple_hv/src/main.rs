@@ -17,7 +17,7 @@ mod sbi;
 mod loader;
 
 use vcpu::VmCpuRegisters;
-use riscv::register::{scause, sstatus, stval};
+use riscv::register::{scause, sstatus};
 use csrs::defs::hstatus;
 use tock_registers::LocalRegisterCopy;
 use csrs::{RiscvCsrTrait, CSR};
@@ -77,10 +77,22 @@ fn run_guest(ctx: &mut VmCpuRegisters) -> bool {
 
 #[allow(unreachable_code)]
 fn vmexit_handler(ctx: &mut VmCpuRegisters) -> bool {
-    use scause::{Exception, Trap};
+    use scause::{Exception, Interrupt, Trap};
 
-    let scause = scause::read();
-    match scause.cause() {
+    let interrupt_bit = 1 << (usize::BITS - 1);
+    let scause = ctx.trap_csrs.scause;
+    let code = scause & !interrupt_bit;
+    let cause = if scause & interrupt_bit != 0 {
+        Trap::Interrupt(Interrupt::from(code))
+    } else {
+        Trap::Exception(Exception::from(code))
+    };
+    let stval = ctx.trap_csrs.stval;
+    match cause {
+        Trap::Interrupt(Interrupt::SupervisorTimer) => {
+            // The host handles the pending timer after restoring its interrupt state.
+            // Resume the guest at the interrupted PC.
+        },
         Trap::Exception(Exception::VirtualSupervisorEnvCall) => {
             let sbi_msg = SbiMessage::from_regs(ctx.guest_regs.gprs.a_regs()).ok();
             ax_println!("VmExit Reason: VSuperEcall: {:?}", sbi_msg);
@@ -103,31 +115,28 @@ fn vmexit_handler(ctx: &mut VmCpuRegisters) -> bool {
         },
         Trap::Exception(Exception::IllegalInstruction) => {
             ax_println!("Bad instruction: {:#x} sepc: {:#x}",
-                stval::read(),
+                stval,
                 ctx.guest_regs.sepc
             );
             ctx.guest_regs.sepc += 4;
-            let insc = stval::read();
-            let target_reg = regs::GprIndex::from_raw(((insc >> 7) & 0x1f) as u32).unwrap_or(A0);
+            let target_reg = regs::GprIndex::from_raw(((stval >> 7) & 0x1f) as u32).unwrap_or(A0);
             ctx.guest_regs.gprs.set_reg(target_reg, 0x1234)
         },
         Trap::Exception(Exception::LoadGuestPageFault) => {
             ax_println!("LoadGuestPageFault: stval{:#x} sepc: {:#x}",
-                stval::read(),
+                stval,
                 ctx.guest_regs.sepc
             );
             ctx.guest_regs.sepc += 4;
-            // let insc = stval::read();
-            // let target_reg = regs::GprIndex::from_raw(((insc >> 7) & 0x1f) as u32).unwrap_or(A0);
             let target_reg = A0;
             ctx.guest_regs.gprs.set_reg(target_reg, 0x6688)
         },
         _ => {
             panic!(
                 "Unhandled trap: {:?}, sepc: {:#x}, stval: {:#x}",
-                scause.cause(),
+                cause,
                 ctx.guest_regs.sepc,
-                stval::read()
+                stval
             );
         }
     }
