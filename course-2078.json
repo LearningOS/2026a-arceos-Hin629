@@ -2,8 +2,8 @@
   "schema": 1,
   "courseId": 2078,
   "repository": "LearningOS/2026a-arceos-Hin629",
-  "commit": "1e59679dbe1d71d7ac28e32405ccba1a7c612381",
-  "score": 500,
+  "commit": "5f4ac457a7c75f1950dc5242d0989f0090944d2c",
+  "score": 600,
   "totalScore": 600,
   "exercises": [
     {
@@ -44,15 +44,15 @@
     {
       "name": "simple_hv",
       "max": 100,
-      "score": 0,
-      "status": "timeout",
-      "exitCode": 124
+      "score": 100,
+      "status": "pass",
+      "exitCode": 0
     }
   ],
   "student": "Hin629",
-  "runId": "43689291320",
+  "runId": "43705409865",
   "runAttempt": "1",
   "upload": {
-    "status": "accepted"
+    "status": "pending"
   }
 }
